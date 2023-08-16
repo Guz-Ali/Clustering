@@ -1,0 +1,194 @@
+---
+title: "CS 422"
+author: "Ali Guzelyel"
+date: "11/21/2021"
+output: html_document
+---
+
+## Libraries
+```{r}
+library(ggplot2)
+library(factoextra)
+library(cluster)
+library(fpc)
+library(dbscan)
+library(dplyr)
+library(stringr)
+```
+
+## 2.1 - K means Clustering
+### A - Read and Prepare Data
+### i: Omit attribute
+```{r}
+set.seed(1122)
+# We should remove the labels as clustering is an unsupervised algorithm.
+#Get rid of "Name"
+
+paste("We should remove the labels as clustering is an unsupervised algorithm. Get rid of 'Name'")
+
+```
+
+### ii: Standardize?
+```{r}
+paste("The data is between 0 and 5. We can standardize this to to get a better understanding of the data, where mean=0, var=1. Will do this after getting the dataset.")
+
+```
+
+### Clean up the TXT file
+### Also normalize it
+```{r}
+# Here I will manually clean the 
+data2 <- read.table(file="file19.txt", header = FALSE, sep = "\t", dec = ".")
+df <- data2[-(1:3),]
+dat_frame <- data.frame(matrix(vector(),ncol=8))
+for (i in 2:67){
+  str <- str_split(df[i], "")
+  #17 19 21 23 25 27 29 31 for attributes
+  rowi <- c(strtoi(str[[1]][17]),strtoi(str[[1]][19]),strtoi(str[[1]][21]),strtoi(str[[1]][23]),strtoi(str[[1]][25]),strtoi(str[[1]][27]),strtoi(str[[1]][29]),strtoi(str[[1]][31]))
+  dat_frame <- rbind(dat_frame, rowi)
+}
+colnames(dat_frame) <- c("I", "i", "C", "c","P", "p", "M", "m")
+
+#Normalize the data
+df <- as.data.frame(scale(dat_frame))
+```
+
+### Save the data
+```{r}
+write.csv(df, file="file19saved.csv", row.names=F)
+df <- read.csv("file19saved.csv", header=T, sep=",")
+df <- as.data.frame(df)
+head(df)
+```
+
+### B - Clustering
+```{r}
+fviz_nbclust(df, kmeans, method = "silhouette")
+#fviz_nbclust(df, kmeans, method = "wss")
+k <- kmeans(df, centers=8)
+paste("looking at silhoutte graph gives 8 clusters.")
+fviz_cluster(k, df, main="K-means Cluster with k=8")
+k$cluster
+paste("There are this many points in each clusters:  1: 8,  2: 11,  3: 19,  4: 7,  5: 2,  6: 9,  7: 9,  8: 1")
+
+paste("total SSE-WSS of the clusters:")
+k$tot.withinss
+paste("SSEs for each clusters")
+k$withinss
+paste("SSE in each clusters:  1: 4,  2: 6,  3: 16,  4: 4,  5: 2,  6: 6,  7: 17,  8: 0")
+which(k$cluster==1)
+paste("all of these are mostly bat types of animals")
+which(k$cluster==2)
+paste("This cluster is cut into two with  mole-type animals and cougar type animals.")
+which(k$cluster==3)
+paste("mostly weasel-squirrel type of animals. However there are a lot of variety. This cluster needs improvement.")
+which(k$cluster==4)
+paste("these are wild-cat like animals. Good job in clustering")
+which(k$cluster==5)
+paste("these are walrus and elephant seal animals. The cluster is too small.")
+which(k$cluster==6)
+paste("This cluster is mostly elk type animals. Generally good.")
+which(k$cluster==7)
+paste("These are wild-cats and moles. Cluster should be divided into two.")
+which(k$cluster==8)
+paste("this is an armadillo, it is natural that this was quite different than the others.")
+
+paste("Overall, the clustering is good. Some clusters needs improvement, we can do it maybe by increasing the amount of clusters.")
+```
+
+
+
+## 2.2 DBSCAN
+### Retrieving the data
+```{r}
+df2 <- read.csv("s1.csv", header=T, sep=",")
+head(df2)
+```
+
+### A - Normalize the data
+```{r}
+colMeans(df2)
+paste("We have to normalize the data since the numbers are too big to make sense of. Normalizing will allow the mean to be 0, and the variance to be 1.")
+df2 <- as.data.frame(scale(df2))
+head(df2)
+colMeans(df2)
+```
+
+
+### B - Plot the dataset & observe
+```{r}
+plot(df2, main="Data without clustering")
+paste("I can see 15 clusters in here, which are well separated.")
+```
+
+### C - K-means
+```{r}
+fviz_nbclust(df2, kmeans, method = "wss", k.max=18)
+fviz_nbclust(df2, kmeans, method = "silhouette", k.max=18)
+
+
+k2 <- kmeans(df2, centers=14)
+fviz_cluster(k2, df2, main="K-means with centers=14")
+paste("Problem with 4 clusters.")
+k2 <- kmeans(df2, centers=15)
+fviz_cluster(k2, df2, main="K-means with centers=15")
+paste("Problem with 4 clusters.")
+k2 <- kmeans(df2, centers=12)
+fviz_cluster(k2, df2, main="K-means with centers=12")
+paste("Problem with 6 clusters.")
+k2 <- kmeans(df2, centers=13)
+fviz_cluster(k2, df2, main="K-means with centers=13")
+paste("Problem with 2 clusters.")
+
+paste("Therefore, I will select 13 clusters for k-means. The clustering is generally better more consistently .")
+```
+
+### E - perform DBSCAN
+### i: MinPts
+```{r}
+paste("some clusters are quite close to each other, and the data points are close to each other in each cluster too.")
+k2$withinss
+k2$size
+paste("Since we have 2-D data, We can set it to 4. UPDATE: after grid searching with different minPts and epsses, I decided to set it to 6. Considering our data is condensed, we can do this.")
+```
+
+### ii: eps
+```{r}
+K <- 6
+
+dbscan::kNNdistplot(df2, K)
+paste("I can see that the eps can be 0.08")
+abline(h = 0.08, lty = 2)
+```
+
+### Cluster
+```{r}
+db <- fpc::dbscan(df2, eps =0.09, MinPts = K)
+fviz_cluster(db, df2, geom = "point", main = "Cluster Plot minPts=5, eps=0.09")
+print(db)
+
+db <- fpc::dbscan(df2, eps =0.085, MinPts = K)
+fviz_cluster(db, df2, geom = "point", main = "Cluster Plot minPts=5, eps=0.085")
+print(db)
+
+db <- fpc::dbscan(df2, eps =0.082, MinPts = K)
+fviz_cluster(db, df2, geom = "point", main = "Cluster Plot minPts=5, eps=0.082")
+print(db)
+
+db <- fpc::dbscan(df2, eps =0.08, MinPts = K)
+fviz_cluster(db, df2, geom = "point", main = "Cluster Plot minPts=5, eps=0.08")
+print(db)
+
+db <- fpc::dbscan(df2, eps =0.078, MinPts = K)
+fviz_cluster(db, df2, geom = "point", main = "Cluster Plot minPts=5, eps=0.078")
+print(db)
+
+paste("Best result is from eps=0.8 with 15 clusters that make sense.")
+```
+### DBScan Result
+```{r}
+paste("At minPts = 4, I tried different epsses. Best eps = 0.08, there are 20 clusters. At minPts = 5, I tried different epsses. Best eps = 0.08, there are 17 clusters. At minPts = 6, I tried different epsses. Best eps = 0.08, there are 15 clusters.")
+paste("Overall, best result was from when minPts=5, eps=0.08. There was less data loss, and the clusters made sense.")
+```
+
+
